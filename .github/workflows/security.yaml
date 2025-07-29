@@ -1,0 +1,53 @@
+name: BASSICS-CICD
+on:
+  
+  pull_request:
+    branches:
+      - main_x
+    paths:
+      - 'terraform/*.tf'
+      - '.github/workflows/devsecops.yaml'
+  
+  push:
+    branches:
+      - development_x
+
+
+jobs:
+
+#####################################
+#  GENERICS
+#####################################
+  BASSICS-CICD:
+    runs-on: ubuntu-latest  
+    steps:
+    
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for Gitleaks to scan the entire history
+
+      #-------------------------
+      # El action tiene un bug que a veces no detecta los leaks
+      #-------------------------
+      #- name: Check for secrets (Gitleaks)
+      #  id: gitleaks_check
+      #  uses: gitleaks/gitleaks-action@v2
+      #  env:
+      #    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #  continue-on-error: true
+
+      - name: Check for secret (Gitleak docker)
+        id: gitleaks_check_docker
+        run: docker run --rm -v $PWD:/data zricethezav/gitleaks:v8.28.0 dir /data -v --exit-code 1
+        continue-on-error: true
+
+
+      - name: Slack Notification
+        if: steps.gitleaks_check_docker.outcome == 'failure'
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_COLOR:    '#fc0303'
+          SLACK_WEBHOOK:  ${{ secrets.SLACK_WH_SECURITY }}
+          SLACK_TITLE:    ':rotating_light:  Possible security leak'
+          SLACK_MESSAGE:  'Gitleaks found a security problem!!!'
